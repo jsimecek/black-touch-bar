@@ -10,7 +10,7 @@ I know there is the popular Hide My Bar app, but I like my apps free and open so
 
 ## How it works
 
-There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through. This is the same technique as Hide My Bar app uses. To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
+There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through (this is the same technique the Hide My Bar app uses). To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
 
 ## Requirements
 
