@@ -19,7 +19,6 @@ extension NSTouchBar {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
-    var statusItem: NSStatusItem?
     var isBlacked = false
     let blackoutID = NSTouchBarItem.Identifier("com.local.blackout")
     let escBlackID = NSTouchBarItem.Identifier("com.local.blackout.esc")
@@ -30,15 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem?.button?.title = "TB"
-
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Toggle Touch Bar", action: #selector(toggle), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
-        statusItem?.menu = menu
-
         setupDoubleCmdDetection()
 
         // Allow toggling via distributed notification (for scripts / Shortcuts)
@@ -96,7 +86,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
             tb.escapeKeyReplacementItemIdentifier = escBlackID
             modalTouchBar = tb
             NSTouchBar.presentSystemModal(tb, identifier: blackoutID)
-            statusItem?.button?.title = "TB off"
         }
     }
 
@@ -109,7 +98,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
 
         touchBarDefaults.set(savedPresentationMode ?? "functionKeys", forKey: "PresentationModeGlobal")
         killControlStrip()
-        statusItem?.button?.title = "TB on"
     }
 
     func touchBar(
@@ -133,9 +121,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         try? p.run(); p.waitUntilExit()
     }
 
-    @objc func quit() {
+    func applicationWillTerminate(_ notification: Notification) {
         if isBlacked { restore() }
-        NSApp.terminate(nil)
     }
 }
 
