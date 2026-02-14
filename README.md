@@ -1,24 +1,28 @@
-# BlackTouchBar
+# black-touch-bar - 2026
 
-A tiny macOS menu-bar app that blacks out the Touch Bar so it doesn't light up when you're working at night.
+A tiny macOS app that blacks out the Touch Bar.
 
-No SIP changes, no sudo, no kernel hacks -- just a black overlay using Apple's own (private) Touch Bar API.
+No SIP changes, no sudo, no kernel hacks, no permissions needed -- just a black overlay using Apple's own (private) Touch Bar API.
+
+## Motivation
+
+I know there is the popular Hide My Bar app, but I like my apps free and open source, so anyone can tweak them to their liking and check the code to make sure it's not doing anything malicious. Also, their app requires some troubleshooting hacks for it to work with Function Keys (F1, F2, etc...), where as this app works out of the box with every Touch Bar setup (I think).
 
 ## How it works
 
-There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through.
+There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through. This is the same technique as Hide My Bar app uses. To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
 
 ## Requirements
 
 - macOS 12+ (Monterey or later)
 - MacBook Pro with Touch Bar
-- Xcode Command Line Tools (`xcode-select --install`)
+- Xcode Command Line Tools for building (`xcode-select --install`)
 
 ## Build & install
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/BlackTouchBar.git
+git clone https://github.com/jsimecek/black-touch-bar.git BlackTouchBar
 cd BlackTouchBar
 
 # 2. Compile the Swift source into a .app bundle
@@ -50,9 +54,8 @@ cat > BlackTouchBar.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 
-# 4. Move the app to ~/Applications
-mkdir -p ~/Applications
-cp -R BlackTouchBar.app ~/Applications/
+# 4. Move the app to /Applications
+cp -R BlackTouchBar.app /Applications/
 ```
 
 ## Usage
@@ -60,46 +63,35 @@ cp -R BlackTouchBar.app ~/Applications/
 ### Start the app
 
 ```bash
-open ~/Applications/BlackTouchBar.app
+open /Applications/BlackTouchBar.app
 ```
 
-A **"TB"** item appears in the menu bar.
+The app now runs in the background.
 
 ### Toggle the Touch Bar black
 
-Pick whichever method you prefer:
-
-| Method | How |
-|---|---|
+| Method               | How                                                    |
+| -------------------- | ------------------------------------------------------ |
 | **Double-press Cmd** | Press and release the Cmd key twice within 0.4 seconds |
-| **Menu bar** | Click the "TB" icon > "Toggle Touch Bar" |
-| **Shell script** | Run `./toggle-touchbar.sh` (included in this repo) |
-| **macOS Shortcuts** | Create a shortcut that runs the shell script above |
+| **Shell script**     | Run `./toggle-touchbar.sh` (included in this repo)     |
+| **macOS Shortcuts**  | Create a shortcut that runs the shell script above     |
 
 ### Auto-start at login
 
-System Settings > General > Login Items > click **+** > select `BlackTouchBar.app` from `~/Applications`
+> System Settings > General > Login Items > click **+** > select **BlackTouchBar**
 
 ### Quit
 
-Click the menu bar icon > **Quit**. The Touch Bar is automatically restored to its previous state.
+The Touch Bar is automatically restored when the app exits. To quit:
 
-## Permissions
-
-On first launch, macOS may ask for **Accessibility** permissions (needed for the double-Cmd hotkey). Grant it in:
-
-System Settings > Privacy & Security > Accessibility
-
-If you skip this, the menu bar icon and script-based toggling still work -- only the keyboard shortcut won't.
-
-## Limitations
-
-- The backlight stays on behind the black LCD, so there's a faint glow in a pitch-dark room. It's dramatically darker than active Touch Bar content, but not truly off.
+```bash
+pkill -x BlackTouchBar
+```
 
 ## Uninstall
 
 ```bash
-rm -rf ~/Applications/BlackTouchBar.app
+rm -rf /Applications/BlackTouchBar.app
 ```
 
 ## License

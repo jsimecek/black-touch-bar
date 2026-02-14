@@ -4,7 +4,7 @@
 # Starts BlackTouchBar.app if needed, then sends it a toggle notification.
 #
 
-APP="$HOME/Applications/BlackTouchBar.app"
+APP="/Applications/BlackTouchBar.app"
 
 pgrep -x BlackTouchBar > /dev/null 2>&1 || { open "$APP" && sleep 1; }
 
