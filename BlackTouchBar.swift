@@ -1,53 +1,33 @@
 import AppKit
 
-// MARK: - Private DFRFoundation API
-
-/// Controls whether the system-modal Touch Bar shows a close (X) button
-/// when the presenting app is frontmost.
-@_silgen_name("DFRSystemModalShowsCloseBoxWhenFrontMost")
-func DFRSystemModalShowsCloseBoxWhenFrontMost(_ shows: Bool)
-
-// MARK: - NSTouchBar private extensions for system-modal presentation
-
 extension NSTouchBar {
     /// Present a system-modal Touch Bar that overlays all other Touch Bar content.
     static func presentSystemModal(_ touchBar: NSTouchBar, identifier: NSTouchBarItem.Identifier) {
-        for name in [
-            "presentSystemModalTouchBar:systemTrayItemIdentifier:",
-            "presentSystemModalFunctionBar:systemTrayItemIdentifier:",
-        ] {
-            let sel = NSSelectorFromString(name)
-            if self.responds(to: sel) {
-                _ = (self as AnyObject).perform(sel, with: touchBar, with: identifier)
-                return
-            }
-        }
+        let sel = NSSelectorFromString("presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
+        let method = unsafeBitCast(
+            (self as AnyObject).method(for: sel),
+            to: (@convention(c) (AnyObject, Selector, NSTouchBar, Int, Any?) -> Void).self
+        )
+        method(self, sel, touchBar, 1, identifier)
     }
 
-    /// Dismiss the currently presented system-modal Touch Bar.
-    static func dismissSystemModal() {
-        for name in [
-            "dismissSystemModalTouchBar:",
-            "dismissSystemModalFunctionBar:",
-        ] {
-            let sel = NSSelectorFromString(name)
-            if self.responds(to: sel) {
-                _ = (self as AnyObject).perform(sel, with: NSTouchBar())
-                return
-            }
-        }
+    /// Minimize (hide) the currently presented system-modal Touch Bar.
+    static func minimizeSystemModal(_ touchBar: NSTouchBar) {
+        let sel = NSSelectorFromString("minimizeSystemModalTouchBar:")
+        _ = (self as AnyObject).perform(sel, with: touchBar)
     }
 }
-
-// MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     var statusItem: NSStatusItem?
     var isBlacked = false
     let blackoutID = NSTouchBarItem.Identifier("com.local.blackout")
+    let escBlackID = NSTouchBarItem.Identifier("com.local.blackout.esc")
+    var modalTouchBar: NSTouchBar?
     var savedPresentationMode: String?
     var lastCmdPressTime: TimeInterval = 0
     var cmdWasDown = false
+    let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -69,8 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
             object: nil
         )
     }
-
-    // MARK: - Double-press Cmd detection
 
     func setupDoubleCmdDetection() {
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
@@ -99,40 +77,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         cmdWasDown = cmdDown
     }
 
-    // MARK: - Toggle
-
     @objc func toggle() {
         isBlacked.toggle()
         if isBlacked { blackOut() } else { restore() }
     }
 
     func blackOut() {
-        // Save current Touch Bar mode and switch to "app" (no control strip)
-        savedPresentationMode = readDefault("PresentationModeGlobal")
-        writeDefault("PresentationModeGlobal", "app")
-        run("/usr/bin/killall", ["ControlStrip"])
+        // Save current Touch Bar mode and switch to "app" (removes F-keys layer)
+        savedPresentationMode = touchBarDefaults.string(forKey: "PresentationModeGlobal")
+        touchBarDefaults.set("app", forKey: "PresentationModeGlobal")
+        killControlStrip()
 
         // After ControlStrip restarts, present the black overlay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
-            DFRSystemModalShowsCloseBoxWhenFrontMost(false)
             let tb = NSTouchBar()
             tb.delegate = self
             tb.defaultItemIdentifiers = [blackoutID]
+            tb.escapeKeyReplacementItemIdentifier = escBlackID
+            modalTouchBar = tb
             NSTouchBar.presentSystemModal(tb, identifier: blackoutID)
-            DFRSystemModalShowsCloseBoxWhenFrontMost(false)
             statusItem?.button?.title = "TB off"
         }
     }
 
     func restore() {
-        NSTouchBar.dismissSystemModal()
-        let mode = savedPresentationMode ?? "functionKeys"
-        writeDefault("PresentationModeGlobal", mode)
-        run("/usr/bin/killall", ["ControlStrip"])
+        // Remove the black overlay
+        if let tb = modalTouchBar {
+            NSTouchBar.minimizeSystemModal(tb)
+            modalTouchBar = nil
+        }
+
+        touchBarDefaults.set(savedPresentationMode ?? "functionKeys", forKey: "PresentationModeGlobal")
+        killControlStrip()
         statusItem?.button?.title = "TB on"
     }
-
-    // MARK: - NSTouchBarDelegate
 
     func touchBar(
         _ touchBar: NSTouchBar,
@@ -146,28 +124,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         return item
     }
 
-    // MARK: - Helpers
-
-    func readDefault(_ key: String) -> String? {
+    func killControlStrip() {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        p.arguments = ["read", "com.apple.touchbar.agent", key]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        try? p.run(); p.waitUntilExit()
-        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    func writeDefault(_ key: String, _ value: String) {
-        run("/usr/bin/defaults", ["write", "com.apple.touchbar.agent", key, "-string", value])
-    }
-
-    func run(_ path: String, _ args: [String]) {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: path)
-        p.arguments = args
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        p.arguments = ["ControlStrip"]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         try? p.run(); p.waitUntilExit()
@@ -178,8 +138,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         NSApp.terminate(nil)
     }
 }
-
-// MARK: - Main
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)

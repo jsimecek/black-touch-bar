@@ -6,7 +6,7 @@ No SIP changes, no sudo, no kernel hacks -- just a black overlay using Apple's o
 
 ## How it works
 
-There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black view that covers the entire Touch Bar display. Since the LCD is showing pure black, almost no light passes through.
+There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through.
 
 ## Requirements
 
@@ -94,7 +94,6 @@ If you skip this, the menu bar icon and script-based toggling still work -- only
 
 ## Limitations
 
-- A small **X button** remains visible on the left edge of the Touch Bar. This is the system-modal dismiss control that macOS enforces and can't be removed without disabling SIP.
 - The backlight stays on behind the black LCD, so there's a faint glow in a pitch-dark room. It's dramatically darker than active Touch Bar content, but not truly off.
 
 ## Uninstall
