@@ -10,7 +10,7 @@ I know there is the popular Hide My Bar app for this, but I like my apps free an
 
 ## How it works
 
-There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using Apple's private `NSTouchBar` and `DFRFoundation` APIs. Since the LCD is showing pure black, almost no light passes through (this is the same technique the Hide My Bar app uses). To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
+There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using undocumented `NSTouchBar` methods (the Hide My Bar app uses the same technique). To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
 
 ## Requirements
 
@@ -29,30 +29,10 @@ cd BlackTouchBar
 mkdir -p BlackTouchBar.app/Contents/MacOS
 swiftc -O BlackTouchBar.swift \
     -o BlackTouchBar.app/Contents/MacOS/BlackTouchBar \
-    -framework AppKit \
-    -F /System/Library/PrivateFrameworks \
-    -framework DFRFoundation
+    -framework AppKit
 
 # 3. Add the Info.plist so macOS treats it as a background app (no Dock icon)
-cat > BlackTouchBar.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>BlackTouchBar</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.local.BlackTouchBar</string>
-    <key>CFBundleName</key>
-    <string>BlackTouchBar</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-    <key>LSUIElement</key>
-    <true/>
-</dict>
-</plist>
-EOF
+cp Info.plist BlackTouchBar.app/Contents/Info.plist
 
 # 4. Move the app to /Applications
 cp -R BlackTouchBar.app /Applications/
