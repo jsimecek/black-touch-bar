@@ -16,9 +16,17 @@ There's no public API to control the Touch Bar backlight. BlackTouchBar works ar
 
 - macOS 12+ (Monterey or later)
 - MacBook Pro with Touch Bar
-- Xcode Command Line Tools for building (`xcode-select --install`)
 
-## Build & install
+## Setup
+
+### Install from DMG
+
+1. Download `BlackTouchBar.dmg` from the [Releases](https://github.com/jsimecek/black-touch-bar/releases) page
+2. Open the DMG and drag **BlackTouchBar** into **Applications**
+
+### Build from source
+
+Requires Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
 # 1. Clone the repo
@@ -37,6 +45,14 @@ cp Info.plist BlackTouchBar.app/Contents/Info.plist
 # 4. Move the app to /Applications
 cp -R BlackTouchBar.app /Applications/
 ```
+
+#### Create the DMG yourself
+
+```bash
+./create-dmg.sh
+```
+
+This compiles the app and packages it into `BlackTouchBar.dmg` with a drag-to-Applications layout.
 
 ## Usage
 
@@ -73,6 +89,10 @@ pkill -x BlackTouchBar
 ```bash
 rm -rf /Applications/BlackTouchBar.app
 ```
+
+## Troubleshooting
+
+If the Touch Bar ever gets stuck, you can reset it by manually changing the mode in System Settings > Keyboard > Touch Bar Settings > Touch Bar shows.
 
 ## License
 
