@@ -1,37 +1,40 @@
 import AppKit
 
+// Private NSTouchBar API for system-modal overlays. These selectors are not part of the
+// public SDK and may break in future macOS versions.
 extension NSTouchBar {
-    /// Present a system-modal Touch Bar that overlays all other Touch Bar content.
     static func presentSystemModal(_ touchBar: NSTouchBar, identifier: NSTouchBarItem.Identifier) {
-        let sel = NSSelectorFromString("presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
+        let selector = NSSelectorFromString("presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
         let method = unsafeBitCast(
-            (self as AnyObject).method(for: sel),
+            (self as AnyObject).method(for: selector),
             to: (@convention(c) (AnyObject, Selector, NSTouchBar, Int, Any?) -> Void).self
         )
-        method(self, sel, touchBar, 1, identifier)
+        method(self, selector, touchBar, 1, identifier) // placement 1 = replace entire Touch Bar
     }
 
-    /// Minimize (hide) the currently presented system-modal Touch Bar.
     static func minimizeSystemModal(_ touchBar: NSTouchBar) {
-        let sel = NSSelectorFromString("minimizeSystemModalTouchBar:")
-        _ = (self as AnyObject).perform(sel, with: touchBar)
+        let selector = NSSelectorFromString("minimizeSystemModalTouchBar:")
+        _ = (self as AnyObject).perform(selector, with: touchBar)
     }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
-    var isBlacked = false
     let blackoutID = NSTouchBarItem.Identifier("com.local.blackout")
     let escBlackID = NSTouchBarItem.Identifier("com.local.blackout.esc")
+    let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")! // ControlStrip's prefs
+    let doubleTapInterval: TimeInterval = 0.4
+
+    var isBlacked = false
     var modalTouchBar: NSTouchBar?
+    var pendingBlackout: DispatchWorkItem?
     var savedPresentationMode: String?
     var lastCmdPressTime: TimeInterval = 0
-    var cmdWasDown = false
-    let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")!
+    var wasCmdDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setupDoubleCmdDetection()
+        observeDoubleCmdPress()
 
-        // Allow toggling via distributed notification (for scripts / Shortcuts)
+        // Allow toggling via scripts / Shortcuts (e.g. toggle-touchbar.sh)
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(toggle),
@@ -40,63 +43,75 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         )
     }
 
-    func setupDoubleCmdDetection() {
-        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleFlags(event)
+    func applicationWillTerminate(_ notification: Notification) {
+        guard isBlacked else { return }
+        restore()
+    }
+
+    func observeDoubleCmdPress() {
+        // Global catches events in other apps, local catches events in this app
+        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] in
+            self?.handleFlagsChanged($0)
         }
-        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleFlags(event)
-            return event
+        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] in
+            self?.handleFlagsChanged($0)
+            return $0
         }
     }
 
-    func handleFlags(_ event: NSEvent) {
-        let cmdDown = event.modifierFlags.contains(.command)
-        let otherMods: NSEvent.ModifierFlags = [.shift, .option, .control]
-        let hasOtherMods = !event.modifierFlags.intersection(otherMods).isEmpty
+    func handleFlagsChanged(_ event: NSEvent) {
+        let isCmdDown = event.modifierFlags.contains(.command)
+        let hasOtherModifiers = !event.modifierFlags.intersection([.shift, .option, .control]).isEmpty
 
-        if cmdDown && !cmdWasDown && !hasOtherMods {
-            let now = ProcessInfo.processInfo.systemUptime
-            if now - lastCmdPressTime < 0.4 {
-                lastCmdPressTime = 0
-                DispatchQueue.main.async { self.toggle() }
-            } else {
-                lastCmdPressTime = now
-            }
+        defer { wasCmdDown = isCmdDown }
+
+        guard isCmdDown, !wasCmdDown, !hasOtherModifiers else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastCmdPressTime < doubleTapInterval else {
+            lastCmdPressTime = now
+            return
         }
-        cmdWasDown = cmdDown
+
+        lastCmdPressTime = 0
+        DispatchQueue.main.async { [self] in toggle() }
     }
 
     @objc func toggle() {
         isBlacked.toggle()
-        if isBlacked { blackOut() } else { restore() }
+        isBlacked ? blackOut() : restore()
     }
 
     func blackOut() {
-        // Save current Touch Bar mode and switch to "app" (removes F-keys layer)
+        // Switch to "app" mode so the function keys layer doesn't bypass the overlay
         savedPresentationMode = touchBarDefaults.string(forKey: "PresentationModeGlobal")
         touchBarDefaults.set("app", forKey: "PresentationModeGlobal")
-        killControlStrip()
+        killControlStrip() // Force ControlStrip to restart and pick up the new mode
 
-        // After ControlStrip restarts, present the black overlay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
-            let tb = NSTouchBar()
-            tb.delegate = self
-            tb.defaultItemIdentifiers = [blackoutID]
-            tb.escapeKeyReplacementItemIdentifier = escBlackID
-            modalTouchBar = tb
-            NSTouchBar.presentSystemModal(tb, identifier: blackoutID)
+        // Wait for ControlStrip to respawn before presenting, otherwise it can override the overlay
+        let work = DispatchWorkItem { [self] in
+            let bar = NSTouchBar()
+            bar.delegate = self
+            bar.defaultItemIdentifiers = [blackoutID]
+            bar.escapeKeyReplacementItemIdentifier = escBlackID
+            modalTouchBar = bar
+            NSTouchBar.presentSystemModal(bar, identifier: blackoutID)
         }
+        pendingBlackout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     func restore() {
-        // Remove the black overlay
-        if let tb = modalTouchBar {
-            NSTouchBar.minimizeSystemModal(tb)
+        pendingBlackout?.cancel()
+        pendingBlackout = nil
+
+        if let bar = modalTouchBar {
+            NSTouchBar.minimizeSystemModal(bar)
             modalTouchBar = nil
         }
 
-        touchBarDefaults.set(savedPresentationMode ?? "functionKeys", forKey: "PresentationModeGlobal")
+        let mode = savedPresentationMode ?? "functionKeys"
+        touchBarDefaults.set(mode, forKey: "PresentationModeGlobal")
         killControlStrip()
     }
 
@@ -113,21 +128,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     }
 
     func killControlStrip() {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        p.arguments = ["ControlStrip"]
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        try? p.run(); p.waitUntilExit()
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        if isBlacked { restore() }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        process.arguments = ["ControlStrip"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
     }
 }
 
 let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
+app.setActivationPolicy(.accessory) // No dock icon, no menu bar
 let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
