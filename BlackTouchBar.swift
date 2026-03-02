@@ -83,6 +83,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     }
 
     func blackOut() {
+        // Turn off the keyboard backlight
+        setKeyboardBacklight(0)
+
         // Switch to "app" mode so the function keys layer doesn't bypass the overlay
         savedPresentationMode = touchBarDefaults.string(forKey: "PresentationModeGlobal")
         touchBarDefaults.set("app", forKey: "PresentationModeGlobal")
@@ -125,6 +128,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         view.layer?.backgroundColor = NSColor.black.cgColor
         item.view = view
         return item
+    }
+
+    func setKeyboardBacklight(_ brightness: Float) {
+        guard
+            let bundle = Bundle(path: "/System/Library/PrivateFrameworks/CoreBrightness.framework"),
+            bundle.isLoaded || bundle.load(),
+            let clientClass = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type
+        else { return }
+
+        typealias SetBrightnessFn = @convention(c) (AnyObject, Selector, Float, UInt64) -> Bool
+
+        let client = clientClass.init()
+        let sel = NSSelectorFromString("setBrightness:forKeyboard:")
+        let setBrightness = unsafeBitCast((client as AnyObject).method(for: sel), to: SetBrightnessFn.self)
+        _ = setBrightness(client, sel, brightness, 1)
     }
 
     func killControlStrip() {
