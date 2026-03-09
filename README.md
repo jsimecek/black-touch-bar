@@ -2,11 +2,11 @@
 
 A tiny macOS app that blacks out the Touch Bar.
 
-No SIP changes, no sudo, no kernel hacks, no permissions needed -- just a black overlay using Apple's own (private) Touch Bar API.
+No SIP changes, no sudo, no kernel hacks, no permissions needed, just a black overlay using Apple's own (private) Touch Bar API.
 
 ## Motivation
 
-I know there is the popular Hide My Bar app for this, but I like my apps free and open source, so anyone can tweak them to their liking and check the code to make sure it's not doing anything malicious. Also, their app requires some troubleshooting hacks for it to work with Function Keys (F1, F2, etc...), where as this app works out of the box with every Touch Bar setup (I think). It can also be triggered by the provided shell script, thus integrate with Apple Shortcuts or other automation tools.
+I know there is the popular Hide My Bar app for this, but I like my apps free and open source, so anyone can tweak them to their liking and check the code to make sure it's not doing anything malicious. Also, their app requires some troubleshooting hacks for it to work with Function Keys (F1, F2, etc...), where as this app works out of the box with every Touch Bar setup. It can also be triggered by the provided shell script, thus integrate with Apple Shortcuts or other automation tools.
 
 ## How it works
 

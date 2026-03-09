@@ -30,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     var savedPresentationMode: String?
     var lastCmdPressTime: TimeInterval = 0
     var wasCmdDown = false
+    var wasFnDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         observeDoubleCmdPress()
@@ -60,6 +61,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
     }
 
     func handleFlagsChanged(_ event: NSEvent) {
+        let isFnDown = event.modifierFlags.contains(.function)
+        if isFnDown != wasFnDown {
+            wasFnDown = isFnDown
+            handleFnKey(isDown: isFnDown)
+        }
+
         let isCmdDown = event.modifierFlags.contains(.command)
         let hasOtherModifiers = !event.modifierFlags.intersection([.shift, .option, .control]).isEmpty
 
@@ -75,6 +82,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
 
         lastCmdPressTime = 0
         DispatchQueue.main.async { [self] in toggle() }
+    }
+
+    func handleFnKey(isDown: Bool) {
+        guard isBlacked, let bar = modalTouchBar else { return }
+
+        if isDown {
+            NSTouchBar.minimizeSystemModal(bar)
+        } else {
+            NSTouchBar.presentSystemModal(bar, identifier: blackoutID)
+        }
     }
 
     @objc func toggle() {
@@ -98,6 +115,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
             bar.defaultItemIdentifiers = [blackoutID]
             bar.escapeKeyReplacementItemIdentifier = escBlackID
             modalTouchBar = bar
+
+            guard !wasFnDown else { return }
+
             NSTouchBar.presentSystemModal(bar, identifier: blackoutID)
         }
         pendingBlackout = work
