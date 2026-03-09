@@ -23,6 +23,10 @@ There's no public API to control the Touch Bar backlight. BlackTouchBar works ar
 
 1. Download `BlackTouchBar.dmg` from the [Releases](https://github.com/jsimecek/black-touch-bar/releases) page
 2. Open the DMG and drag **BlackTouchBar** into **Applications**
+3. Remove the macOS quarantine flag (I do not pay for an Apple Developer account, so macOS will not let you run the app otherwise):
+   ```bash
+   xattr -cr /Applications/BlackTouchBar.app
+   ```
 
 ### Build from source
 
