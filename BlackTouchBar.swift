@@ -12,27 +12,29 @@ extension NSTouchBar {
         method(self, selector, touchBar, 1, identifier) // placement 1 = replace entire Touch Bar
     }
 
-    static func minimizeSystemModal(_ touchBar: NSTouchBar) {
-        let selector = NSSelectorFromString("minimizeSystemModalTouchBar:")
+    static func dismissSystemModal(_ touchBar: NSTouchBar) {
+        let selector = NSSelectorFromString("dismissSystemModalTouchBar:")
         _ = (self as AnyObject).perform(selector, with: touchBar)
     }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
-    let blackoutID = NSTouchBarItem.Identifier("com.local.blackout")
-    let escBlackID = NSTouchBarItem.Identifier("com.local.blackout.esc")
-    let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")! // ControlStrip's prefs
-    let doubleTapInterval: TimeInterval = 0.4
+    private let blackoutID = NSTouchBarItem.Identifier("com.local.blackout")
+    private let escBlackID = NSTouchBarItem.Identifier("com.local.blackout.esc")
+    private let touchBarDefaults = UserDefaults(suiteName: "com.apple.touchbar.agent")! // ControlStrip's prefs
+    private let doubleTapInterval: TimeInterval = 0.4
+    private let respawnPollInterval: TimeInterval = 0.02
+    private let respawnTimeout: TimeInterval = 0.5
 
-    var isBlacked = false
-    var modalTouchBar: NSTouchBar?
-    var pendingBlackout: DispatchWorkItem?
-    var savedPresentationMode: String?
-    var lastCmdPressTime: TimeInterval = 0
-    var wasCmdDown = false
-    var wasFnDown = false
+    private var isBlackedOut = false
+    private var modalTouchBar: NSTouchBar?
+    private var pendingBlackout: DispatchWorkItem?
+    private var savedPresentationMode: String?
+    private var lastCmdPressTime: TimeInterval = 0
+    private var wasCmdDown = false
+    private var wasFnDown = false
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         observeDoubleCmdPress()
 
         // Allow toggling via scripts / Shortcuts (e.g. toggle-touchbar.sh)
@@ -44,12 +46,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         )
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        guard isBlacked else { return }
+    func applicationWillTerminate(_: Notification) {
+        guard isBlackedOut else { return }
         restore()
     }
 
-    func observeDoubleCmdPress() {
+    private func observeDoubleCmdPress() {
         // Global catches events in other apps, local catches events in this app
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] in
             self?.handleFlagsChanged($0)
@@ -60,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         }
     }
 
-    func handleFlagsChanged(_ event: NSEvent) {
+    private func handleFlagsChanged(_ event: NSEvent) {
         let isFnDown = event.modifierFlags.contains(.function)
         if isFnDown != wasFnDown {
             wasFnDown = isFnDown
@@ -84,31 +86,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         DispatchQueue.main.async { [self] in toggle() }
     }
 
-    func handleFnKey(isDown: Bool) {
-        guard isBlacked, let bar = modalTouchBar else { return }
+    private func handleFnKey(isDown: Bool) {
+        guard isBlackedOut, let bar = modalTouchBar else { return }
 
         if isDown {
-            NSTouchBar.minimizeSystemModal(bar)
+            NSTouchBar.dismissSystemModal(bar)
         } else {
             NSTouchBar.presentSystemModal(bar, identifier: blackoutID)
         }
     }
 
-    @objc func toggle() {
-        isBlacked.toggle()
-        isBlacked ? blackOut() : restore()
+    @objc private func toggle() {
+        isBlackedOut.toggle()
+        isBlackedOut ? blackOut() : restore()
     }
 
-    func blackOut() {
+    private func blackOut() {
         // Turn off the keyboard backlight
         setKeyboardBacklight(0)
 
-        // Switch to "app" mode so the function keys layer doesn't bypass the overlay
+        // Switch to "app" mode so other modes don't bypass the overlay
         savedPresentationMode = touchBarDefaults.string(forKey: "PresentationModeGlobal")
         touchBarDefaults.set("app", forKey: "PresentationModeGlobal")
         killControlStrip() // Force ControlStrip to restart and pick up the new mode
 
-        // Wait for ControlStrip to respawn before presenting, otherwise it can override the overlay
         let work = DispatchWorkItem { [self] in
             let bar = NSTouchBar()
             bar.delegate = self
@@ -117,19 +118,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
             modalTouchBar = bar
 
             guard !wasFnDown else { return }
-
             NSTouchBar.presentSystemModal(bar, identifier: blackoutID)
         }
         pendingBlackout = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+
+        // Present once ControlStrip has respawned, otherwise it overrides the overlay
+        DispatchQueue.global(qos: .userInteractive).async { [self] in
+            let deadline = Date().addingTimeInterval(respawnTimeout)
+            while Date() < deadline {
+                guard !work.isCancelled else { return }
+                if isControlStripRunning() { break }
+                Thread.sleep(forTimeInterval: respawnPollInterval)
+            }
+            DispatchQueue.main.async(execute: work)
+        }
     }
 
-    func restore() {
+    private func restore() {
         pendingBlackout?.cancel()
         pendingBlackout = nil
 
         if let bar = modalTouchBar {
-            NSTouchBar.minimizeSystemModal(bar)
+            NSTouchBar.dismissSystemModal(bar)
             modalTouchBar = nil
         }
 
@@ -150,7 +160,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         return item
     }
 
-    func setKeyboardBacklight(_ brightness: Float) {
+    private func setKeyboardBacklight(_ brightness: Float) {
         guard
             let bundle = Bundle(path: "/System/Library/PrivateFrameworks/CoreBrightness.framework"),
             bundle.isLoaded || bundle.load(),
@@ -165,7 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         _ = setBrightness(client, sel, brightness, 1)
     }
 
-    func killControlStrip() {
+    private func killControlStrip() {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
         process.arguments = ["ControlStrip"]
@@ -173,6 +183,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSTouchBarDelegate {
         process.standardError = FileHandle.nullDevice
         try? process.run()
         process.waitUntilExit()
+    }
+
+    private func isControlStripRunning() -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        process.arguments = ["-x", "ControlStrip"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        return process.terminationStatus == 0
     }
 }
 
