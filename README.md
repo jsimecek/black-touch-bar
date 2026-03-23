@@ -2,7 +2,7 @@
 
 A tiny macOS app that blacks out the Touch Bar.
 
-No SIP changes, no sudo, no kernel hacks, no permissions needed, just a black overlay using Apple's own (private) Touch Bar API.
+No SIP changes, no sudo, no kernel hacks, just a black overlay using Apple's own (private) Touch Bar API with optional input monitoring permissions for optimized Cmd double-press detection.
 
 ## Motivation
 
@@ -10,12 +10,14 @@ I know there is the popular Hide My Bar app for this, but I like my apps free an
 
 ## How it works
 
-There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using undocumented `NSTouchBar` methods (the Hide My Bar app uses the same technique). To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed.
+There's no public API to control the Touch Bar backlight. BlackTouchBar works around this by presenting a system-modal black overlay that covers the entire Touch Bar display using undocumented `NSTouchBar` methods (the Hide My Bar app uses the same technique). To make it work with Function Keys and other setups, the app saves the current Touch Bar settings, switches to App Controls to do the blackout and restores them after the black overlay is removed. Input monitoring permissions are used to avoid triggering double Cmd presses on Cmd+key shortcuts (Cmd+C, etc.).
 
 ## Requirements
 
 - macOS 12+ (Monterey or later)
 - MacBook Pro with Touch Bar
+- Input Monitoring permission (optional)
+  > System Settings > Privacy & Security > Input Monitoring > click **+** > select **BlackTouchBar**
 
 ## Setup
 
